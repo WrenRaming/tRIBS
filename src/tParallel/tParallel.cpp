@@ -229,6 +229,9 @@ void tParallel::freeBuffers() {
    list<double*>::iterator biter = buffers.begin();
    list<MPI_Request>::iterator riter = requests.begin();
 
+   list<double*>::iterator bremove;
+   list<MPI_Request>::iterator rremove;
+
    int complete;
    MPI_Status status;
 
@@ -320,8 +323,6 @@ double* tParallel::sum(double* value, int n) {
    MPI_Reduce(localValue, valueSum, n, MPI_DOUBLE, MPI_SUM, MASTER_PROC,
       MPI_COMM_WORLD);
 
-   delete [] localValue; //WR debug, I think  deleting local value in this context is okay as MPI_reduce is blocking, Value Sum is later deleted, also implemented in other functions.
-
    return valueSum;
 }
 
@@ -343,8 +344,6 @@ double* tParallel::min(double* value, int n) {
    for (int i = 0; i < n; i++) localValue[i] = value[i];
    MPI_Reduce(localValue, valueSum, n, MPI_DOUBLE, MPI_MIN, MASTER_PROC,
       MPI_COMM_WORLD);
-
-   delete [] localValue;
 
    return valueSum;
 }
@@ -370,8 +369,6 @@ double* tParallel::max(double* value, int n) {
    for (int i = 0; i < n; i++) localValue[i] = value[i];
    MPI_Reduce(localValue, valueSum, n, MPI_DOUBLE, MPI_MAX, MASTER_PROC,
       MPI_COMM_WORLD);
-
-   delete [] localValue;
 
    return valueSum;
 }

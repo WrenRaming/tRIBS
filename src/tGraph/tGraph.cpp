@@ -1619,11 +1619,9 @@ void tGraph::calculateRunFlux() {
   // Loop through reach heads and outlets, looking for 
   // a head in another partition and outlet in the local partition
   // The node upstream from the outlet is the flux node (node above outlet)
-
-  chead = HeadIter.FirstP();
-  coutlet = OutletIter.FirstP();
-
-  for (i=0;!(HeadIter.AtEnd()) && i < numGlobalReach-1;i++) { //WR--09192023: modified for loop to address this warning: left operand of comma operator has no effect [-Wunused-value]
+  for (chead = HeadIter.FirstP(), coutlet = OutletIter.FirstP(), i=0;
+       !(HeadIter.AtEnd()), i < numGlobalReach-1;
+    chead = HeadIter.NextP(), coutlet = OutletIter.NextP(), i++) {
 
     int hpart = getPartition(chead->getReach());
     int opart = getPartition(coutlet->getReach());
@@ -1644,8 +1642,6 @@ void tGraph::calculateRunFlux() {
              << " " << localPart << endl;
       }
     }
-    chead = HeadIter.NextP();
-    coutlet = OutletIter.NextP();
   }
 }
 
@@ -1958,7 +1954,7 @@ bool tGraph::isRemotefluxNode(tCNode* cn) {
 void tGraph::sendDownstream(int rid, tCNode* snode, double value) {
   assert(rid >= 0 && rid < numGlobalReach);
 #ifdef PARALLEL_TRIBS
-  // double* ndata = new double[1]; //WR debug moved to inside scope of if statment to prevent memory leak
+  double* ndata = new double[1];
   // Get list of downstream reaches
   std::vector<int> dreach = conn[rid].getDownstream();
   // For each on another processor, send data
@@ -1966,7 +1962,7 @@ void tGraph::sendDownstream(int rid, tCNode* snode, double value) {
 
     // Send if last reach
     if ( !inLocalPartition(dreach[i])) {
-        double* ndata = new double[1]; // WR debug added
+
       int to_proc = reach2partition[ dreach[i] ]; // To processor
       // Collect node data and send
       ndata[0] = value;
@@ -2001,7 +1997,6 @@ void tGraph::receiveUpstream(int rid, tCNode* rnode) {
     }
   }
   delete [] ndata;
-  tParallel::freeBuffers();// WR debug: put this at end of each receive call, it checks to see which previously assinged pointer  arrays can be safely deleted
 #endif
 }
 
@@ -2089,7 +2084,6 @@ void tGraph::receiveOverlap() {
       delete [] ndata;
     }
   }
-  tParallel::freeBuffers();// WR debug: put this at end of each receive call, it checks to see which previously assinged pointer  arrays can be safely deleted
 #endif
 }
 
@@ -2103,7 +2097,7 @@ void tGraph::sendQpin(int rid, tCNode* snode, double value) {
   assert(rid >= 0 && rid < numGlobalReach);
 
 #ifdef PARALLEL_TRIBS
-  //double* ndata = new double[1]; //WR debug added to scope of if statment to prevent memory leak
+  double* ndata = new double[1];
   // Get list of downstream reaches
   std::vector<int> dreach = conn[rid].getDownstream();
 
@@ -2112,7 +2106,7 @@ void tGraph::sendQpin(int rid, tCNode* snode, double value) {
 
     // Send from last reach
     if ( !inLocalPartition(dreach[i])) {
-        double* ndata = new double[1];
+
         int to_proc = reach2partition[ dreach[i] ]; // To processor
 
       // Collect node data and send
@@ -2151,7 +2145,6 @@ void tGraph::receiveQpin(int rid, tCNode* rnode) {
     }
   }
   delete [] ndata;
-  tParallel::freeBuffers();// WR debug: put this at end of each receive call, it checks to see which previously assinged pointer  arrays can be safely deleted
 #endif
 }
 
@@ -2176,14 +2169,14 @@ void tGraph::sendInitial() {
       for (il = localFlux[i].begin(); il != localFlux[i].end(); ++il) {
         int soilID = (*il)->getSoilID();
         double vArea = (*il)->getVArea();
-        ndata[d++] = static_cast<double>(soilID);//*(reinterpret_cast<double*>(&soilID)); //WR debug converts int pointer to double pointer and derefs as double--possible source undefined behavior
+        ndata[d++] = *(reinterpret_cast<double*>(&soilID));
         ndata[d++] = vArea;
       }
 
       for (il = upFlow[i].begin(); il != upFlow[i].end(); ++il) {
         int soilID = (*il)->getSoilID();
         double vArea = (*il)->getVArea();
-        ndata[d++] = static_cast<double>(soilID);//*(reinterpret_cast<double*>(&soilID));//WR debug converts int pointer to double pointer and derefs as double--possible source undefined behavior
+        ndata[d++] = *(reinterpret_cast<double*>(&soilID));
         ndata[d++] = vArea;
       }
       tParallel::send(i, INITIAL, ndata, dsizeN);
@@ -2213,20 +2206,19 @@ void tGraph::receiveInitial() {
       std::set<tCNode*>::iterator ir;
       int d = 0;
       for (ir = remoteFlux[i].begin(); ir != remoteFlux[i].end(); ++ir) {
-          int soilID = static_cast<int>(ndata[d++]);//int soilID = *(reinterpret_cast<int*>(&ndata[d++]));//WR debug converts double pointer to int pointer and derefs as int--possible source undefined behavior
+        int soilID = *(reinterpret_cast<int*>(&ndata[d++]));
         (*ir)->setSoilID(soilID);
         (*ir)->setVArea(ndata[d++]);
       }
 
       for (ir = downFlow[i].begin(); ir != downFlow[i].end(); ++ir) {
-          int soilID = static_cast<int>(ndata[d++]);// int soilID = *(reinterpret_cast<int*>(&ndata[d++])); //WR debug converts int pointer to double pointer and derefs as int--possible source undefined behavior
+        int soilID = *(reinterpret_cast<int*>(&ndata[d++]));
         (*ir)->setSoilID(soilID);
         (*ir)->setVArea(ndata[d++]);
       }
       delete [] ndata;
     }
   }
-  tParallel::freeBuffers();// WR debug: put this at end of each receive call, it checks to see which previously assinged pointer  arrays can be safely deleted
 #endif
 }
 
@@ -2260,8 +2252,6 @@ void tGraph::sendRunFlux(tCNode* cn) {
 
    }
  }
-
-  delete [] ndata;
 #endif
 }
 
@@ -2298,7 +2288,6 @@ void tGraph::receiveRunFlux(tCNode* cn) {
     }
   }
   delete [] ndata;
-  tParallel::freeBuffers();// WR debug: put this at end of each receive call, it checks to see which previously assinged pointer  arrays can be safely deleted
 #endif
 }
 
@@ -2352,7 +2341,6 @@ void tGraph::receiveDownstreamFlow() {
       delete [] ndata;
     }
   }
-  tParallel::freeBuffers();// WR debug: put this at end of each receive call, it checks to see which previously assinged pointer  arrays can be safely deleted
 #endif
 }
 
@@ -2378,7 +2366,7 @@ void tGraph::sendGroundWater() {
           ++iflux) {
         list<double>& rflist = (*iflux)->getGwaterChngList();
         int count = rflist.size();
-        ndata[c++] = static_cast<double>(count);//*(reinterpret_cast<double*>(&count));//WR debug converts int pointer to double pointer and derefs as int--possible source undefined behavior
+        ndata[c++] = *(reinterpret_cast<double*>(&count));
         list<double>::iterator iter;
         for (iter = rflist.begin(); iter != rflist.end(); ++iter) {
           ndata[c++] = (*iter);
@@ -2411,15 +2399,13 @@ void tGraph::receiveGroundWater() {
       std::set<tCNode*>::iterator iflux;
       for (iflux = localFlux[i].begin(); iflux != localFlux[i].end();
           ++iflux) {
-        int count = static_cast<int>(ndata[c++]);//*(reinterpret_cast<int*>(&ndata[c++]));//WR debug: static_cast is safer
+        int count = *(reinterpret_cast<int*>(&ndata[c++]));
         for (int j = 0; j < count; j++) {
           (*iflux)->addGwaterChng(ndata[c++]);
         }
       }
-      delete [] ndata; //WR debug: ndata can be deleted here as tParallel:receive uses MPI_Recv which is a blocking process
     }
   }
-    tParallel::freeBuffers();// WR debug: put this at end of each receive call, it checks to see which previously assinged pointer  arrays can be safely deleted
 #endif
 }
 
@@ -2475,7 +2461,7 @@ void tGraph::receiveNwt() {
       delete [] ndata;
     }
   }
-    tParallel::freeBuffers();// WR debug: put this at end of each receive call, it checks to see which previously assinged pointer  arrays can be safely deleted
+  tParallel::freeBuffers();
 #endif
 }
 
